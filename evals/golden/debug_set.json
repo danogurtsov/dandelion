@@ -1,0 +1,58 @@
+[
+  {
+    "slug": "fluid",
+    "seeds": [[1, "0x52Aa899454998Be5b000Ad077a46Bbe360F4e497"]],
+    "probe_chains": [1],
+    "expect": {
+      "proxy_kind": "eip1967_transparent",
+      "impl": "0xcc331daf69752bece3dc98dbc63eacd5092266a2",
+      "min_nodes": 3
+    }
+  },
+  {
+    "slug": "aave-pool",
+    "seeds": [[1, "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"]],
+    "probe_chains": [1],
+    "note": "admin lives in an immutable (custom InitializableImmutableAdminUpgradeabilityProxy), not the 1967 admin slot",
+    "expect": { "is_proxy": true, "min_nodes": 2 }
+  },
+  {
+    "slug": "velodrome-factory",
+    "seeds": [[10, "0xF1046053aa5682b4F9a81b5481394DA16BE5FF5a"]],
+    "probe_chains": [10],
+    "expect": { "min_nodes": 1 }
+  },
+  {
+    "slug": "morpho-blue",
+    "seeds": [[1, "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"]],
+    "probe_chains": [1],
+    "expect": { "proxy_kind": "none", "min_nodes": 1 }
+  },
+  {
+    "slug": "debridge-gate",
+    "seeds": [[1, "0x43dE2d77BF8027e25dBD179B491e8d64f38398aA"]],
+    "probe_chains": [1, 42161, 10, 8453, 137, 56, 43114],
+    "expect": {
+      "proxy_kind": "eip1967_transparent",
+      "mirror_chains": [42161, 137, 56, 43114]
+    }
+  },
+  {
+    "slug": "meth-staking",
+    "seeds": [[1, "0xe3cBd06D7dadB3F4e6557bAb7EdD924CD1489E8f"]],
+    "probe_chains": [1],
+    "expect": { "min_nodes": 2 }
+  },
+  {
+    "slug": "liquity-collreg",
+    "seeds": [[1, "0xd99de73b95236f69a559117ecd6f519af780f3f7"]],
+    "probe_chains": [1],
+    "expect": { "proxy_kind": "none", "min_nodes": 1 }
+  },
+  {
+    "slug": "gmx-vault",
+    "seeds": [[42161, "0x489ee077994B6658eAfA855C308275EAd8097C4A"]],
+    "probe_chains": [42161],
+    "expect": { "min_nodes": 1 }
+  }
+]
