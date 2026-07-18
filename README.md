@@ -134,6 +134,15 @@ The graph structure is always **deterministic fact**; the LLM only proposes wher
 is **model-agnostic**: any OpenAI-compatible key (DeepSeek, OpenAI, OpenRouter, Groq) or an
 Anthropic key / Claude subscription plugs in behind the same port.
 
+**The LLM earns its place — measured, not assumed.** An ablation harness (`evals/ablation.py`)
+quantifies exactly what the reasoning loop adds over pure determinism. The honest result: on
+source-available protocols the deterministic engine already recovers the structure, so the LLM
+adds **~0 new nodes** and contributes a semantic layer (protocol summary, role labels); its
+structural value is reserved for genuinely opaque contracts (bytecode-only, no ABI). Two
+safety properties make it trustworthy: the model can only *propose* a read — every result is
+re-derived deterministically on-chain, so even a prompt-injected model **cannot inject a fake
+node** — and untrusted on-chain text (names, state) is sanitized before it reaches the prompt.
+
 ## Architecture
 
 Hexagonal (ports & adapters). A pure `domain/` core (graph model, proxy detection, membership,
@@ -166,8 +175,8 @@ protocols (Aave, Fluid, Morpho, Velodrome, deBridge, Liquity, GMX, mETH).
 ### Generalization (held-out set)
 
 Metrics on the tuning set alone would be circular. `evals/run_evals.py --set holdout` scores
-protocols the heuristics were **not** built against. On the first run — no protocol-specific
-tuning — the generic engine mapped **3 of 4**: Spark Lend (an Aave fork at entirely different
+protocols the heuristics were **not** built against. On the first run, with no protocol-specific
+tuning, the generic engine mapped **3 of 4**: Spark Lend (an Aave fork at entirely different
 addresses) to 40 named nodes, Balancer V2's singleton Vault, and Compound V3's Comet, all at
 **precision 1.0**. The one gap is honest: Curve's Vyper `coins(i)` token-list idiom without a
 verified ABI. The discovery engine is generic; curated lists only add a boost.
