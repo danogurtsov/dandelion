@@ -260,6 +260,10 @@ class ArchitectureGraph:
         ]
         if by_token_role:
             lines.append("  tokens: " + ", ".join(f"{k}={v}" for k, v in sorted(by_token_role.items())))
+        # membership precision proxy (lazy import — audit lives in a sibling module)
+        from .audit import membership_audit
+        au = membership_audit(self)
+        lines.append(f"  precision≈{au.precision_proxy} (leaked {au.leaked_members}/{au.total_members} members)")
         if self.clone_classes:
             for c in self.clone_classes:
                 lines.append(

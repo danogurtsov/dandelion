@@ -46,9 +46,11 @@ clone-classes. No hints, no repo.
   funds sit. Often the crux, and absent from source.
 - **Real usage matters.** Recent transactions and traces separate live components from dead
   ones and reveal actual callers and admin actions.
-- **Over-inclusive by design.** When a contract might belong to the project, it gets crawled.
-  Growth is bounded by real structure (clone-collapse, a shallow external boundary), never by
-  an arbitrary node cap.
+- **Over-inclusive by design, but measured.** When a contract might belong to the project, it
+  gets crawled. Growth is bounded by real structure (clone-collapse, a shallow external
+  boundary), never by an arbitrary node cap. And over-inclusion is not a blind spot: every run
+  reports a **membership precision proxy** and audits external-asset / operator-key leakage
+  (`--audit`), so precision is a tracked number, not just recall.
 
 ## Install
 
@@ -157,8 +159,9 @@ mypy src/dandelion/domain    # types on the pure core
 ```
 
 The `evals/` harness replays golden fixtures against live RPC and scores proxy resolution,
-naming, node recall, mirror coverage and clone collapse across a set of real protocols
-(Aave, Fluid, Morpho, Velodrome, deBridge, Liquity, GMX, mETH).
+naming, node recall, **membership precision** (a leak audit that gates external-asset and
+operator-key false positives), mirror coverage and clone collapse across a set of real
+protocols (Aave, Fluid, Morpho, Velodrome, deBridge, Liquity, GMX, mETH).
 
 ## License
 

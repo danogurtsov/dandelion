@@ -131,6 +131,12 @@ def finalize_membership(graph: ArchitectureGraph) -> None:
     members = {k for k, n in graph.nodes.items() if n.is_scope}
     # reserve assets (the pool custodies them) — external by code, excluded from the member fixpoint
     asset_ref = {k for k in graph.nodes if is_reserved_asset(graph, k)}
+    # non-seed EOAs are externally-owned operators/signers, NOT project contracts. Their
+    # authority still flows through edges + authority-closure (by address); architecture
+    # membership is about code, so an EOA is never a member (this was a real precision leak:
+    # bridge validator/admin keys were being counted as members).
+    eoa_ext = {k for k, n in graph.nodes.items()
+               if not n.is_scope and n.node_type == NodeType.EOA}
 
     def _authorities() -> set[str]:
         auth: set[str] = set()
@@ -154,7 +160,7 @@ def finalize_membership(graph: ArchitectureGraph) -> None:
         changed = False
         authorities, proj_deployers = _authorities(), _proj_deployers()
         for k, n in graph.nodes.items():
-            if k in members or is_known_external(n.address) or k in asset_ref:
+            if k in members or is_known_external(n.address) or k in asset_ref or k in eoa_ext:
                 continue
             sig = _node_signals(graph, k, n, members, authorities, proj_deployers)
             if membership_score(sig) >= 0.55:   # MEMBER_THRESHOLD
@@ -176,6 +182,14 @@ def finalize_membership(graph: ArchitectureGraph) -> None:
             n.membership, n.membership_score = "external", 0.0
             if "external: asset (reserve/underlying)" not in n.notes:
                 n.notes.append("external: asset (reserve/underlying)")
+            continue
+        if k in eoa_ext:
+            n.membership, n.membership_score = "external", 0.0
+            holds = any(e.src == k and e.edge_type == EdgeType.HOLDS_ROLE_OVER
+                        for e in graph.edges)
+            note = "external: project authority (EOA)" if holds else "external: EOA"
+            if note not in n.notes:
+                n.notes.append(note)
             continue
         sig = _node_signals(graph, k, n, members, authorities, proj_deployers)
         n.membership_score = round(membership_score(sig), 3)

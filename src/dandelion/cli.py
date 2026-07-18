@@ -32,6 +32,7 @@ def map(  # noqa: A001 - CLI command name
     activity: bool = typer.Option(
         True, "--activity/--no-activity",
         help="Use Blockscout activity (deployer/top-callers/co-occurrence) for discovery."),
+    audit: bool = typer.Option(False, help="Print the membership precision audit (leaked-member list)."),
     enrich: bool = typer.Option(False, help="Run the LLM reasoning loop (semantic labels + probes + expansion)."),
     rounds: int = typer.Option(2, help="Reasoning rounds for --enrich (determinism<->LLM)."),
     llm: str = typer.Option(
@@ -81,6 +82,13 @@ def map(  # noqa: A001 - CLI command name
     typer.echo(graph.summary())
     if graph.meta.get("protocol"):
         typer.echo("protocol: " + graph.meta["protocol"])
+    if audit:
+        from .domain.audit import membership_audit
+        au = membership_audit(graph)
+        typer.echo(f"\nprecision audit: {au.precision_proxy}  "
+                   f"leaked {au.leaked_members}/{au.total_members} members")
+        for key, name, reason in au.leaks:
+            typer.echo(f"  leak {key} ({name}): {reason}")
     typer.echo(f"-> {out}")
 
 

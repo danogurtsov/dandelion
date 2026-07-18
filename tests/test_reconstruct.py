@@ -112,8 +112,12 @@ def test_membership_computed_from_signals():
     g = _run()
     # impl inherits scope → member
     assert g.get_node(1, B).membership == "member"
-    # admin/owner hold a role over a member = project control → member (authority)
+    # ADMIN is a contract authority (has code) → member
     assert g.get_node(1, ADMIN).membership == "member"
-    assert g.get_node(1, OWNER).membership == "member"
+    # OWNER is an EOA (no code) → external operator, never a member; authority lives in edges
+    owner = g.get_node(1, OWNER)
+    assert owner.node_type == NodeType.EOA
+    assert owner.membership == "external"
+    assert any("EOA" in note for note in owner.notes)
     # mirror of the same address on chain 10 → member (multichain_mirror)
     assert g.get_node(10, A).membership == "member"

@@ -51,6 +51,13 @@ def evaluate(graph: ArchitectureGraph, seeds: list, expect: dict) -> dict:
     c = sum(1 for n in graph.nodes.values() if n.membership == "candidate")
     ext = sum(1 for n in graph.nodes.values() if n.membership == "external")
     checks["membership"] = f"m{m}/c{c}/e{ext}"
+
+    # precision: measure it, not just recall. leak audit + hard gate (no external leaks).
+    from dandelion.domain.audit import membership_audit
+    au = membership_audit(graph)
+    checks["precision_proxy"] = au.precision_proxy
+    checks["leaked_members"] = au.leaked_members
+    checks["no_external_members_ok"] = au.leaked_members == 0
     return checks
 
 

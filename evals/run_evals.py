@@ -69,7 +69,8 @@ async def main() -> None:
             continue
         c = r["checks"]
         brief = " ".join(f"{k}={v}" for k, v in c.items()
-                          if k in ("seed_proxy", "named_nodes", "unknown_nodes", "mirror_coverage", "clone_classes"))
+                          if k in ("seed_proxy", "named_nodes", "unknown_nodes", "mirror_coverage",
+                                   "clone_classes", "precision_proxy", "leaked_members"))
         print(f"{r['slug']:18s} {'✓' if r['pass'] else '✗':5s} {r.get('seconds',0):<4} {brief}")
     print(f"\n{npass}/{len(results)} passed")
     if dump:
