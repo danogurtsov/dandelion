@@ -32,6 +32,8 @@ def map(  # noqa: A001 - CLI command name
     activity: bool = typer.Option(
         True, "--activity/--no-activity",
         help="Use Blockscout activity (deployer/top-callers/co-occurrence) for discovery."),
+    block: int | None = typer.Option(
+        None, help="Pin every read to a historical block (incident forensics; needs an archive node)."),
     audit: bool = typer.Option(False, help="Print the membership precision audit (leaked-member list)."),
     enrich: bool = typer.Option(False, help="Run the LLM reasoning loop (semantic labels + probes + expansion)."),
     rounds: int = typer.Option(2, help="Reasoning rounds for --enrich (determinism<->LLM)."),
@@ -68,7 +70,7 @@ def map(  # noqa: A001 - CLI command name
     async def _run():
         graph = await reconstruct(
             seeds, client, max_nodes=max_nodes, probe_chains=[chain],
-            source=ladder, activity=act,
+            source=ladder, activity=act, at_block=block,
         )
         if enrich:
             from .adapters.llm.factory import build_llm

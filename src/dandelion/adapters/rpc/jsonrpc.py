@@ -24,9 +24,16 @@ def _keccak(data: bytes) -> str:
 class JsonRpcClient:
     rpc_urls: dict[int, str]
     timeout: float = 30.0
+    # pin every read to a historical block (incident forensics); None = "latest". An explicit
+    # block on call() overrides. Requires an archive node for old state.
+    pin_block: int | None = None
     _id: int = field(default=0, init=False)
     # cache of immutable data (contract code never changes) — eliminates repeat fetches
-    _code_cache: dict[tuple[int, str], str] = field(default_factory=dict, init=False)
+    _code_cache: dict[tuple[int, str, int], str] = field(default_factory=dict, init=False)
+
+    def _blk(self, block: int | None = None) -> str:
+        b = block if block is not None else self.pin_block
+        return hex(b) if b is not None else "latest"
 
     async def _rpc(self, chain: int, method: str, params: list[Any]) -> Any:
         url = self.rpc_urls.get(chain)
@@ -43,16 +50,16 @@ class JsonRpcClient:
         return body.get("result")
 
     async def get_code(self, chain: int, addr: str) -> str:
-        key = (chain, addr.lower())
+        key = (chain, addr.lower(), self.pin_block if self.pin_block is not None else -1)
         cached = self._code_cache.get(key)
         if cached is not None:
             return cached
-        code = await self._rpc(chain, "eth_getCode", [addr, "latest"]) or "0x"
+        code = await self._rpc(chain, "eth_getCode", [addr, self._blk()]) or "0x"
         self._code_cache[key] = code
         return code
 
     async def get_storage_at(self, chain: int, addr: str, slot: str) -> str:
-        return await self._rpc(chain, "eth_getStorageAt", [addr, slot, "latest"]) or "0x" + "0" * 64
+        return await self._rpc(chain, "eth_getStorageAt", [addr, slot, self._blk()]) or "0x" + "0" * 64
 
     async def call(
         self,
@@ -66,8 +73,7 @@ class JsonRpcClient:
         tx: dict[str, str] = {"to": to, "data": data}
         if from_:
             tx["from"] = from_
-        blk = hex(block) if block is not None else "latest"
-        return await self._rpc(chain, "eth_call", [tx, blk]) or "0x"
+        return await self._rpc(chain, "eth_call", [tx, self._blk(block)]) or "0x"
 
     async def codehash(self, chain: int, addr: str) -> str | None:
         code = await self.get_code(chain, addr)
@@ -86,6 +92,9 @@ class JsonRpcClient:
         from_block: int = 0,
         to_block: str = "latest",
     ) -> list[dict]:
+        # when pinned, cap the window at the pinned block so logs match the historical state
+        if to_block == "latest" and self.pin_block is not None:
+            to_block = hex(self.pin_block)
         flt = {
             "address": addr,
             "fromBlock": hex(from_block),

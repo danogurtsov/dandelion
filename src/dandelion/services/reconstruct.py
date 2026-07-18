@@ -22,6 +22,7 @@ from ..domain.classify import classify_bytecode, type_from_name
 from ..domain.clones import collapse_clones
 from ..domain.cooccurrence import rank_neighbors, strong_neighbors
 from ..domain.deployers import is_common_deployer
+from ..domain.diagnostics import Diagnostics
 from ..domain.factory_events import create_event_topics, created_addresses_from_logs
 from ..domain.getters import getter_purpose, speculative_struct_getters
 from ..domain.labels import is_known_external
@@ -210,6 +211,7 @@ async def reconstruct(
     activity: object | None = None,   # ActivityPort: deployer/last-active/co-occurrence (optional)
     deep_cooccur: int = 0,               # trace_transaction on N sample txs of the seeds (0=off)
     concurrency: int = 8,                # how many frontier nodes to process in parallel
+    at_block: int | None = None,         # pin every read to a historical block (incident forensics)
     existing: ArchitectureGraph | None = None,  # merge mode: expand an existing graph
     on_event: Callable[[str, dict], None] | None = None,
 ) -> ArchitectureGraph:
@@ -224,7 +226,20 @@ async def reconstruct(
             on_event(kind, data)
 
     merge = existing is not None
-    graph = existing if merge else ArchitectureGraph()
+    graph: ArchitectureGraph = existing if existing is not None else ArchitectureGraph()
+    diag = Diagnostics()         # visible failures — no silent swallowing
+
+    # block-pinning: pin the client's reads to a historical block (incident forensics). When
+    # pinned, skip activity — indexers report present-day callers, which would pollute a
+    # historical map. Archive node required for old state.
+    if at_block is not None:
+        if hasattr(rpc, "pin_block"):
+            rpc.pin_block = at_block   # type: ignore[attr-defined]
+        graph.meta["at_block"] = at_block
+        if activity is not None:
+            graph.warn(f"at_block={at_block}: activity skipped (indexers report present state)")
+            activity = None
+
     mirrored: set[str] = set()   # addresses that already had a mirror probe
     peered: set[str] = set()     # addresses that already had an LZ-peer probe
     peer_stub_chains: set[int] = set()  # chains of remote peers (for stubs if unreachable)
@@ -254,6 +269,7 @@ async def reconstruct(
             code = await rpc.get_code(chain, addr)
         except Exception as e:  # noqa: BLE001
             graph.warn(f"get_code failed {k}: {e}")
+            diag.note("rpc_errors", k, e)
             return
 
         if not code or code == "0x":
@@ -324,6 +340,11 @@ async def reconstruct(
                 info = await source.resolve(chain, addr, code=code)
             except TypeError:
                 info = await source.resolve(chain, addr)
+            except Exception as e:  # noqa: BLE001
+                info = None
+                diag.note("source_misses", k, e)
+            if info is None:
+                diag.note("source_misses", k, "no verified source / decompile")
             if info:
                 node.name = info.name
                 try:
@@ -448,8 +469,9 @@ async def reconstruct(
                     try:
                         logs = await rpc.get_logs(
                             chain, addr, topics=[create_event_topics()], from_block=0)
-                    except Exception:  # noqa: BLE001
+                    except Exception as e:  # noqa: BLE001
                         logs = []
+                        diag.note("log_errors", k, e)
                     if logs and dominant_topic0(logs) in SINGLETON_TOPICS:
                         # singleton: markets = logical entities without an address; reusable
                         # components (IRM/tokens) = real nodes; per-market oracle → into refs.
@@ -679,6 +701,8 @@ async def reconstruct(
     if not merge:
         graph.roots = sorted(seed_keys)
     graph.meta.update({"visited": len(visited), "node_count": len(graph.nodes)})
+    if diag.total():
+        graph.meta["diagnostics"] = diag.to_dict()   # visible failures — no silent swallowing
     if max_nodes is not None and len(graph.nodes) >= max_nodes:
         graph.warn(f"max_nodes limit hit ({max_nodes}) — graph may be incomplete "
                    f"(the limit is optional; default None = no limit)")

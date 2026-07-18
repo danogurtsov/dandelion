@@ -73,7 +73,8 @@ async def ablate(case: dict, key: str, llm_spec: str) -> dict:
 async def main() -> None:
     key = os.getenv("DRPC_KEY")
     if not key:
-        print("set DRPC_KEY"); sys.exit(2)
+        print("set DRPC_KEY")
+        sys.exit(2)
     llm_spec = "anthropic:claude-sonnet-5"
     slugs = None
     if "--llm" in sys.argv:

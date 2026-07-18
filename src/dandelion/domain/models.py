@@ -270,6 +270,12 @@ class ArchitectureGraph:
                     f"  clone-class {c.class_id[:14]}… total={c.total_count} "
                     f"sampled={len(c.sampled)} capped={c.capped} [{c.registration}]"
                 )
+        if self.meta.get("at_block") is not None:
+            lines.append(f"  pinned at block {self.meta['at_block']}")
+        diag = self.meta.get("diagnostics")
+        if diag:
+            counts = ", ".join(f"{k}={v}" for k, v in diag.items() if k != "samples")
+            lines.append(f"  ⚠ diagnostics: {counts}")
         for w in self.meta.get("warnings", []):
             lines.append(f"  ⚠ {w}")
         return "\n".join(lines)

@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .labels import is_known_external
-from .models import ArchitectureGraph, EdgeType, NodeType
+from .models import ArchitectureGraph, NodeType
 from .tokens import is_reserved_asset
 
 

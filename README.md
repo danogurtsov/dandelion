@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Python-3.11--3.13-3776AB?logo=python&logoColor=white" alt="Python" />
   <img src="https://img.shields.io/badge/lint-ruff-261230?logo=ruff&logoColor=white" alt="Ruff" />
   <img src="https://img.shields.io/badge/types-mypy-2A6DB2" alt="mypy" />
-  <img src="https://img.shields.io/badge/tests-106%20passing-3fb950" alt="tests" />
+  <img src="https://img.shields.io/badge/tests-124%20passing-3fb950" alt="tests" />
   <img src="https://img.shields.io/badge/License-MIT-blue" alt="License: MIT" />
 </p>
 
@@ -51,6 +51,10 @@ clone-classes. No hints, no repo.
   boundary), never by an arbitrary node cap. And over-inclusion is not a blind spot: every run
   reports a **membership precision proxy** and audits external-asset / operator-key leakage
   (`--audit`), so precision is a tracked number, not just recall.
+- **Forensic-grade, no silent failures.** Pin every read to a historical block (`--block N`)
+  to reconstruct the architecture as it was during an incident. Every skipped read is counted
+  and surfaced in the graph's diagnostics, so an incomplete map declares itself instead of
+  looking complete.
 
 ## Install
 
@@ -72,6 +76,9 @@ dandelion map 0xADDR --chain 1 --rpc $RPC --no-etherscan
 
 # Add the LLM reasoning loop (propose reads, probe deterministically, expand)
 dandelion map 0xADDR --chain 1 --rpc $RPC --enrich --llm anthropic:claude-sonnet-5
+
+# Reconstruct the architecture as of a historical block (incident forensics)
+dandelion map 0xADDR --chain 1 --rpc $ARCHIVE_RPC --block 17000000 --audit
 ```
 
 Or from Python:
@@ -134,14 +141,14 @@ The graph structure is always **deterministic fact**; the LLM only proposes wher
 is **model-agnostic**: any OpenAI-compatible key (DeepSeek, OpenAI, OpenRouter, Groq) or an
 Anthropic key / Claude subscription plugs in behind the same port.
 
-**The LLM earns its place — measured, not assumed.** An ablation harness (`evals/ablation.py`)
+**The LLM earns its place: measured, not assumed.** An ablation harness (`evals/ablation.py`)
 quantifies exactly what the reasoning loop adds over pure determinism. The honest result: on
 source-available protocols the deterministic engine already recovers the structure, so the LLM
 adds **~0 new nodes** and contributes a semantic layer (protocol summary, role labels); its
-structural value is reserved for genuinely opaque contracts (bytecode-only, no ABI). Two
-safety properties make it trustworthy: the model can only *propose* a read — every result is
+structural value is reserved for genuinely opaque contracts (bytecode-only, no ABI). Two safety
+properties make it trustworthy. First, the model can only *propose* a read; every result is
 re-derived deterministically on-chain, so even a prompt-injected model **cannot inject a fake
-node** — and untrusted on-chain text (names, state) is sanitized before it reaches the prompt.
+node**. Second, untrusted on-chain text (names, state) is sanitized before it reaches the prompt.
 
 ## Architecture
 
@@ -162,7 +169,7 @@ src/dandelion/
 ## Development
 
 ```bash
-pytest                       # 106 unit tests, no network required
+pytest                       # 124 unit tests, no network required
 ruff check .                 # lint
 mypy src/dandelion/domain    # types on the pure core
 ```
