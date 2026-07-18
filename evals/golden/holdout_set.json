@@ -1,0 +1,30 @@
+[
+  {
+    "slug": "spark-lend-pool",
+    "seeds": [[1, "0xC13e21B648A5Ee794902342038FF3aDAB66BE987"]],
+    "probe_chains": [1],
+    "note": "Aave-v3 fork with different addresses/governance — tests the generic registry path, not Aave-specific hardcoded addresses",
+    "expect": {"is_proxy": true, "min_nodes": 5}
+  },
+  {
+    "slug": "curve-3pool",
+    "seeds": [[1, "0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7"]],
+    "probe_chains": [1],
+    "note": "Curve stableswap pool — a totally different registry/token idiom (coins() indexed getters, no Aave-style provider)",
+    "expect": {"min_nodes": 3}
+  },
+  {
+    "slug": "balancer-v2-vault",
+    "seeds": [[1, "0xBA12222222228d8Ba445958a75a0704d566BF2C8"]],
+    "probe_chains": [1],
+    "note": "Balancer V2 singleton Vault — pools are registered inside one contract, non-Aave architecture",
+    "expect": {"min_nodes": 2}
+  },
+  {
+    "slug": "compound-v3-comet",
+    "seeds": [[1, "0xc3d688B66703497DAA19211EEdff47f25384cdc3"]],
+    "probe_chains": [1],
+    "note": "Compound V3 (Comet) cUSDCv3 — per-market Comet contract, different from Aave reserves",
+    "expect": {"is_proxy": true, "min_nodes": 3}
+  }
+]

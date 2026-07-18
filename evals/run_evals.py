@@ -2,9 +2,13 @@
 Eval runner: run reconstruct on golden fixtures via dRPC + metrics.
 
 Usage:
-  DRPC_KEY=... PYTHONPATH=src python evals/run_evals.py [--dump]
+  DRPC_KEY=... PYTHONPATH=src python evals/run_evals.py [--dump] [--set golden|holdout]
 
 The dRPC key comes from the DRPC_KEY env var (not hardcoded). Reports go to evals/report/ (gitignored).
+
+The `golden` set is the tuning set (used while building the heuristics). The `holdout` set is
+protocols NOT used during development (Spark, Curve, Balancer, Compound V3) — the only honest
+evidence of generalization. Run it once; report the numbers as they are, good or bad.
 """
 from __future__ import annotations
 
@@ -24,7 +28,10 @@ from dandelion.adapters.sources.ladder import default_ladder  # noqa: E402
 from dandelion.chains import drpc_urls  # noqa: E402
 from dandelion.services.reconstruct import reconstruct  # noqa: E402
 
-GOLDEN = Path(__file__).parent / "golden" / "debug_set.json"
+SETS = {
+    "golden": Path(__file__).parent / "golden" / "debug_set.json",
+    "holdout": Path(__file__).parent / "golden" / "holdout_set.json",
+}
 REPORT_DIR = Path(__file__).parent / "report"
 
 
@@ -52,7 +59,11 @@ async def main() -> None:
         print("set DRPC_KEY env")
         sys.exit(2)
     dump = "--dump" in sys.argv
-    cases = json.loads(GOLDEN.read_text())
+    which = "golden"
+    if "--set" in sys.argv:
+        which = sys.argv[sys.argv.index("--set") + 1]
+    cases = json.loads(SETS[which].read_text())
+    print(f"eval set: {which}" + ("  (HELD-OUT — outside the tuning set)" if which == "holdout" else ""))
     results = []
     for case in cases:
         try:

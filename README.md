@@ -163,6 +163,15 @@ naming, node recall, **membership precision** (a leak audit that gates external-
 operator-key false positives), mirror coverage and clone collapse across a set of real
 protocols (Aave, Fluid, Morpho, Velodrome, deBridge, Liquity, GMX, mETH).
 
+### Generalization (held-out set)
+
+Metrics on the tuning set alone would be circular. `evals/run_evals.py --set holdout` scores
+protocols the heuristics were **not** built against. On the first run — no protocol-specific
+tuning — the generic engine mapped **3 of 4**: Spark Lend (an Aave fork at entirely different
+addresses) to 40 named nodes, Balancer V2's singleton Vault, and Compound V3's Comet, all at
+**precision 1.0**. The one gap is honest: Curve's Vyper `coins(i)` token-list idiom without a
+verified ABI. The discovery engine is generic; curated lists only add a boost.
+
 ## License
 
 [MIT](LICENSE)
