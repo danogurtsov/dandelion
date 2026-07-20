@@ -51,6 +51,7 @@ from ..domain.proxies import (
     detect_proxy,
 )
 from ..domain.reads import decode_address_array, decode_address_strict
+from ..domain.relations import custody_candidates, retype_oracle_reads
 from ..domain.singleton import (
     SINGLETON_TOPICS,
     dominant_topic0,
@@ -65,6 +66,7 @@ from .probes import (
     is_admin_role,
     is_lz_oapp,
     read_addr,
+    read_balance,
     read_raw,
     reserve_components,
     role_holders,
@@ -697,6 +699,20 @@ async def reconstruct(
 
     finalize_membership(graph)
     finalize_token_roles(graph)   # own | reserved | transient for token nodes
+
+    # semantic relation typing (fill the dead READS_PRICE_FROM / HOLDS_FUNDS edges) —
+    # deterministic refinement after membership; oracle-reads are free, custody uses balanceOf.
+    priced = retype_oracle_reads(graph)
+    funds = 0
+    for holder_k, token_k in custody_candidates(graph)[:40]:
+        hc, ha = holder_k.split(":", 1)
+        tc, ta = token_k.split(":", 1)
+        bal = await read_balance(rpc, int(tc), ta, ha)
+        if bal and bal > 0:
+            graph.add_edge(holder_k, token_k, EdgeType.HOLDS_FUNDS, "balanceOf>0")
+            funds += 1
+    if priced or funds:
+        emit("relations", reads_price_from=priced, holds_funds=funds)
 
     if not merge:
         graph.roots = sorted(seed_keys)

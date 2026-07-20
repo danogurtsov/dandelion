@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Python-3.11--3.13-3776AB?logo=python&logoColor=white" alt="Python" />
   <img src="https://img.shields.io/badge/lint-ruff-261230?logo=ruff&logoColor=white" alt="Ruff" />
   <img src="https://img.shields.io/badge/types-mypy-2A6DB2" alt="mypy" />
-  <img src="https://img.shields.io/badge/tests-142%20passing-3fb950" alt="tests" />
+  <img src="https://img.shields.io/badge/tests-147%20passing-3fb950" alt="tests" />
   <img src="https://img.shields.io/badge/License-MIT-blue" alt="License: MIT" />
 </p>
 
@@ -107,7 +107,9 @@ asyncio.run(main())
   governance / LP), `reserved` (assets the protocol custodies, i.e. the accepted deposit list),
   or `transient` (merely seen in flows).
 - **edges**: `is_proxy_for`, `holds_role_over`, `depends_on`, `created_by`, `calls`,
-  `mirrors_deployment` (cross-chain), `peer_of` (LayerZero).
+  `mirrors_deployment` (cross-chain), `peer_of` (LayerZero), and semantically-typed relations
+  `reads_price_from` (a dependency on an oracle) and `holds_funds` (a contract custodies a token,
+  confirmed by a live balance read).
 - **clone_classes**: thousands of identical instances folded into one class (logic identity
   plus a sample cap), never crawled in full.
 - **logical entities**: address-less market state (e.g. Morpho Blue markets) captured as
@@ -162,6 +164,10 @@ The AI sits behind a **validation membrane** and is never a writer. It plays two
 
 Untrusted on-chain text (names, state) is sanitized before it reaches any prompt, and the loop is
 routed to the nodes where determinism actually stalled; everywhere else stays purely deterministic.
+On an unknown contract the judge-style pass may also propose a **type hypothesis** (from a fixed
+vocabulary) and a **protocol family** (`aave-v3-fork`, `layerzero-oapp`, …); both are applied only
+where determinism found nothing and are flagged `origin="llm"`, so a fact stays a fact and a guess
+stays a marked guess. This is where the AI earns its keep on protocols outside the tested sample.
 
 ## Architecture
 
@@ -182,7 +188,7 @@ src/dandelion/
 ## Development
 
 ```bash
-pytest                       # 142 unit tests, no network required
+pytest                       # 147 unit tests, no network required
 ruff check .                 # lint
 mypy src/dandelion/domain    # types on the pure core
 ```

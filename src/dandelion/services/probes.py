@@ -52,6 +52,20 @@ async def read_bool(rpc: RpcPort, chain: int, to: str, sig: str) -> bool | None:
         return None
 
 
+_BALANCE_OF = "0x70a08231"   # balanceOf(address)
+
+
+async def read_balance(rpc: RpcPort, chain: int, token: str, holder: str) -> int | None:
+    """balanceOf(holder) on `token` (for HOLDS_FUNDS custody typing). None on revert."""
+    h = norm_addr(holder)
+    if not h:
+        return None
+    try:
+        return decode_uint(await rpc.call(chain, token, _BALANCE_OF + h[2:].rjust(64, "0")))
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def selector_of(sig: str) -> str | None:
     """4-byte selector for a no-arg signature: known or keccak. Args not supported."""
     known = read_calldata(sig)

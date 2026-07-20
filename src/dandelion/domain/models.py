@@ -263,6 +263,10 @@ class ArchitectureGraph:
         ]
         if by_token_role:
             lines.append("  tokens: " + ", ".join(f"{k}={v}" for k, v in sorted(by_token_role.items())))
+        price_reads = sum(1 for e in self.edges if e.edge_type == EdgeType.READS_PRICE_FROM)
+        custody = sum(1 for e in self.edges if e.edge_type == EdgeType.HOLDS_FUNDS)
+        if price_reads or custody:
+            lines.append(f"  relations: reads_price_from={price_reads}, holds_funds={custody}")
         # membership precision proxy (lazy import — audit lives in a sibling module)
         from .audit import membership_audit
         au = membership_audit(self)
@@ -273,6 +277,8 @@ class ArchitectureGraph:
                     f"  clone-class {c.class_id[:14]}… total={c.total_count} "
                     f"sampled={len(c.sampled)} capped={c.capped} [{c.registration}]"
                 )
+        if self.meta.get("family"):
+            lines.append(f"  family (llm): {self.meta['family']}")
         if self.meta.get("at_block") is not None:
             lines.append(f"  pinned at block {self.meta['at_block']}")
         diag = self.meta.get("diagnostics")

@@ -13,11 +13,15 @@ import json
 import re
 from collections.abc import Callable
 
-from ..domain.models import ArchitectureGraph
+from ..domain.models import ArchitectureGraph, NodeType
 from ..domain.routing import is_opaque, opaque_keys
 from ..domain.sanitize import sanitize_untrusted
 from ..domain.selectors import extract_selectors
 from ..ports import LlmMessage
+
+# node types the LLM may hypothesize for an UNKNOWN node (fixed vocabulary — no free-form types)
+_TYPE_VOCAB = {"token", "pool", "vault", "router", "factory", "oracle",
+               "governance", "timelock", "multisig"}
 
 _SYSTEM = (
     "You are an on-chain protocol architecture analyst. You are given a graph reconstructed "
@@ -29,7 +33,11 @@ _SYSTEM = (
 
 _INSTRUCT = (
     'Return ONLY JSON: {"protocol": "<1-2 sentences: what this protocol is and how it splits '
-    'across chains>", "labels": [{"key": "<node key from input>", "role": "<short purpose>"}], '
+    'across chains>", "family": "<protocol family if recognizable, e.g. aave-v3-fork / '
+    'uniswap-v2-fork / layerzero-oapp, else empty>", '
+    '"types": [{"key": "<node key that is [stalled]/type=unknown>", "type": "<one of: token '
+    'pool vault router factory oracle governance timelock multisig>"}], '
+    '"labels": [{"key": "<node key from input>", "role": "<short purpose>"}], '
     '"actions": [{"key": "<node key>", "kind": "<read_addr|read_addr_array|enumerate_index|'
     'reserve_keyed>", "sig": "<one function signature matching the kind>", '
     '"purpose": "<struct|asset|generic>", "why": "<what component it would reveal>"}]}. '
@@ -172,6 +180,19 @@ async def enrich_graph(
 
     if data.get("protocol"):
         graph.meta["protocol"] = data["protocol"]
+    if data.get("family"):
+        graph.meta["family"] = sanitize_untrusted(data["family"], cap=48)
+    # type HYPOTHESES for opaque/unknown nodes (flexibility on off-sample protocols): the LLM's
+    # guess is applied ONLY where determinism found UNKNOWN, from a fixed vocabulary, and flagged
+    # as a hypothesis with origin=llm — a fact stays a fact, a guess is marked a guess.
+    for h in data.get("types", []):
+        node = graph.nodes.get(h.get("key", ""))
+        t = str(h.get("type", "")).strip().lower()
+        if node and node.node_type == NodeType.UNKNOWN and t in _TYPE_VOCAB:
+            node.node_type = NodeType(t)
+            node.origin = "llm"
+            if "type: llm-hypothesis" not in node.notes:
+                node.notes.append("type: llm-hypothesis")
     for lab in data.get("labels", []):
         node = graph.nodes.get(lab.get("key", ""))
         if node and lab.get("role"):
