@@ -139,6 +139,7 @@ class ContractNode:
     membership_score: float = 1.0          # 0..1 confidence of project membership
     token_role: str | None = None       # for tokens: own | reserved | transient
     deployer: str | None = None         # deployer address (creation tx)
+    origin: str = "deterministic"       # deterministic | llm (provenance of discovery)
     notes: list[str] = field(default_factory=list)
 
     @property
@@ -189,6 +190,7 @@ class Edge:
     dst: str
     edge_type: EdgeType
     label: str = ""
+    origin: str = "deterministic"   # deterministic | llm (provenance of this relation)
 
 
 @dataclass
@@ -218,8 +220,9 @@ class ArchitectureGraph:
     def has_node(self, chain_id: int, addr: str) -> bool:
         return node_key(chain_id, addr) in self.nodes
 
-    def add_edge(self, src_key: str, dst_key: str, edge_type: EdgeType, label: str = "") -> None:
-        e = Edge(src_key, dst_key, edge_type, label)
+    def add_edge(self, src_key: str, dst_key: str, edge_type: EdgeType, label: str = "",
+                 origin: str = "deterministic") -> None:
+        e = Edge(src_key, dst_key, edge_type, label, origin)
         if e.src and e.dst and e not in self.edges:
             self.edges.append(e)
 

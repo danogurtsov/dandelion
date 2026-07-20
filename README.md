@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Python-3.11--3.13-3776AB?logo=python&logoColor=white" alt="Python" />
   <img src="https://img.shields.io/badge/lint-ruff-261230?logo=ruff&logoColor=white" alt="Ruff" />
   <img src="https://img.shields.io/badge/types-mypy-2A6DB2" alt="mypy" />
-  <img src="https://img.shields.io/badge/tests-124%20passing-3fb950" alt="tests" />
+  <img src="https://img.shields.io/badge/tests-142%20passing-3fb950" alt="tests" />
   <img src="https://img.shields.io/badge/License-MIT-blue" alt="License: MIT" />
 </p>
 
@@ -145,10 +145,23 @@ Anthropic key / Claude subscription plugs in behind the same port.
 quantifies exactly what the reasoning loop adds over pure determinism. The honest result: on
 source-available protocols the deterministic engine already recovers the structure, so the LLM
 adds **~0 new nodes** and contributes a semantic layer (protocol summary, role labels); its
-structural value is reserved for genuinely opaque contracts (bytecode-only, no ABI). Two safety
-properties make it trustworthy. First, the model can only *propose* a read; every result is
-re-derived deterministically on-chain, so even a prompt-injected model **cannot inject a fake
-node**. Second, untrusted on-chain text (names, state) is sanitized before it reaches the prompt.
+structural value is reserved for genuinely opaque contracts (bytecode-only, no ABI).
+
+The AI sits behind a **validation membrane** and is never a writer. It plays two isolated roles:
+
+- **Proposer.** It may only return *typed actions* (`read_addr`, `read_addr_array`,
+  `enumerate_index`, `reserve_keyed`) against stalled nodes; the deterministic layer executes and
+  validates each (well-formed signature, no revert, strict address decode, target has code, not
+  known-external) before an `origin="llm"` edge is added. The membrane is **superset-only**: it
+  can only add validated leads, never delete or reclassify a deterministic finding, so a wrong or
+  prompt-injected proposal wastes a read and is counted in diagnostics, and it cannot corrupt the graph.
+- **Judge.** A separate, read-only panel (control / code / adversarial-refute lenses) that
+  measures real membership precision, **calibrated against a human gold set** (Cohen's κ) so its
+  numbers are trusted only as far as it agrees with people. This turns the precision proxy into a
+  measured number.
+
+Untrusted on-chain text (names, state) is sanitized before it reaches any prompt, and the loop is
+routed to the nodes where determinism actually stalled; everywhere else stays purely deterministic.
 
 ## Architecture
 
@@ -169,7 +182,7 @@ src/dandelion/
 ## Development
 
 ```bash
-pytest                       # 124 unit tests, no network required
+pytest                       # 142 unit tests, no network required
 ruff check .                 # lint
 mypy src/dandelion/domain    # types on the pure core
 ```

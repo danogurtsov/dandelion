@@ -11,7 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 # recognized failure kinds (counters)
-_KINDS = ("rpc_errors", "source_misses", "getter_reverts", "log_errors", "decode_failures")
+_KINDS = ("rpc_errors", "source_misses", "getter_reverts", "log_errors", "decode_failures",
+          "llm_rejected")
 
 
 @dataclass
@@ -21,6 +22,7 @@ class Diagnostics:
     getter_reverts: int = 0
     log_errors: int = 0
     decode_failures: int = 0
+    llm_rejected: int = 0        # AI-proposed actions rejected by the validation membrane
     samples: list[str] = field(default_factory=list)
 
     def note(self, kind: str, where: str = "", err: object = "") -> None:

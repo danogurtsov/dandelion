@@ -14,7 +14,9 @@ import re
 from collections.abc import Callable
 
 from ..domain.models import ArchitectureGraph
+from ..domain.routing import is_opaque, opaque_keys
 from ..domain.sanitize import sanitize_untrusted
+from ..domain.selectors import extract_selectors
 from ..ports import LlmMessage
 
 _SYSTEM = (
@@ -26,12 +28,19 @@ _SYSTEM = (
 )
 
 _INSTRUCT = (
-    'Return JSON: {"protocol": "<1-2 sentences: what this protocol is and how it is split across '
-    'chains>", "labels": [{"key": "<node key from input>", "role": "<short purpose, e.g. lending '
-    'pool / price oracle / admin multisig>"}], "probes": [{"key": "<node key>", '
-    '"read": "<exactly ONE no-arg view function signature, e.g. getMinDelay(); no alternatives, '
-    'no arguments>", "why": "<what it would confirm>"}]}. '
-    "Only add labels where you contribute real signal (esp. type=unknown). Keep it short."
+    'Return ONLY JSON: {"protocol": "<1-2 sentences: what this protocol is and how it splits '
+    'across chains>", "labels": [{"key": "<node key from input>", "role": "<short purpose>"}], '
+    '"actions": [{"key": "<node key>", "kind": "<read_addr|read_addr_array|enumerate_index|'
+    'reserve_keyed>", "sig": "<one function signature matching the kind>", '
+    '"purpose": "<struct|asset|generic>", "why": "<what component it would reveal>"}]}. '
+    "Actions let you extend discovery on STALLED nodes (unknown type, no ABI, un-enumerated "
+    "factory). Use: read_addr for name() returning one component address (purpose=struct for a "
+    "project component like oracle/registry, asset for an external token); read_addr_array for "
+    "name() returning address[]; enumerate_index for name(uint256) that indexes a list (e.g. a "
+    "Vyper coins(uint256) token list, purpose=asset); reserve_keyed for name(address) returning "
+    "a struct of component addresses (e.g. getReserveData(address), purpose=struct). Propose a "
+    "sig ONLY if you are confident the contract exposes it. Only label where you add real signal. "
+    "Keep it short."
 )
 
 
@@ -45,6 +54,8 @@ def compact_graph(graph: ArchitectureGraph, *, max_nodes: int = 60) -> str:
         roles = ",".join(f"{r.name}={r.holder[:10]}" for r in n.roles if r.holder)
         safe_name = sanitize_untrusted(n.name, cap=64)   # untrusted on-chain string
         parts = [n.key, f"({safe_name})" if safe_name else "", f"type={n.node_type.value}"]
+        if is_opaque(n) and n.membership != "external":
+            parts.append("[stalled]")     # deterministic expansion found nothing here
         if n.proxy_kind.value != "none":
             parts.append(f"proxy={n.proxy_kind.value}")
         if n.implementation:
@@ -116,16 +127,45 @@ async def apply_llm_probes(
     return discovered
 
 
+async def _selector_hints(graph: ArchitectureGraph, rpc, resolver) -> str:
+    """For opaque nodes, decode their bytecode selectors to signatures (real context for the LLM)."""
+    if rpc is None or resolver is None:
+        return ""
+    lines: list[str] = []
+    for k in opaque_keys(graph)[:8]:
+        n = graph.nodes[k]
+        try:
+            code = await rpc.get_code(n.chain_id, n.address)
+        except Exception:  # noqa: BLE001
+            continue
+        sels = extract_selectors(code, cap=24)
+        if not sels:
+            continue
+        try:
+            resolved = await resolver.resolve(sels)
+        except Exception:  # noqa: BLE001
+            resolved = {}
+        sigs = sorted({sanitize_untrusted(v, cap=48) for v in resolved.values()})
+        if sigs:
+            lines.append(f"  {k} exposes: {', '.join(sigs[:16])}")
+    return ("stalled-node signatures (decoded from bytecode; propose actions against these):\n"
+            + "\n".join(lines)) if lines else ""
+
+
 async def enrich_graph(
     graph: ArchitectureGraph,
     llm,
     *,
+    rpc=None,
+    selector_resolver=None,
     on_event: Callable[[str, dict], None] | None = None,
 ) -> dict:
     """Enrich the graph with semantics via the LLM. Returns the parsed response."""
     ctx = compact_graph(graph)
+    hints = await _selector_hints(graph, rpc, selector_resolver)
+    body = f"{_SYSTEM}\n\n{ctx}\n\n{hints}\n\n{_INSTRUCT}" if hints else f"{_SYSTEM}\n\n{ctx}\n\n{_INSTRUCT}"
     messages = [
-        LlmMessage("user", f"{_SYSTEM}\n\n{ctx}\n\n{_INSTRUCT}"),
+        LlmMessage("user", body),
     ]
     raw = await llm.complete(messages, max_tokens=1500)
     data = parse_llm_json(raw)
@@ -136,12 +176,12 @@ async def enrich_graph(
         node = graph.nodes.get(lab.get("key", ""))
         if node and lab.get("role"):
             node.notes.append(f"llm-role: {lab['role']}")
-    if data.get("probes"):
-        graph.meta["llm_probes"] = data["probes"]
+    if data.get("actions"):
+        graph.meta["llm_actions"] = data["actions"]
     if on_event:
         on_event("enrich", {"protocol": data.get("protocol"),
                             "labels": len(data.get("labels", [])),
-                            "probes": len(data.get("probes", []))})
+                            "actions": len(data.get("actions", []))})
     return data
 
 
@@ -152,22 +192,33 @@ async def reason_loop(
     *,
     source: object | None = None,
     rounds: int = 2,
+    diag=None,
+    selector_resolver=None,
     on_event: Callable[[str, dict], None] | None = None,
 ) -> ArchitectureGraph:
     """
-    Full determinism↔LLM loop until convergence: the LLM looks at the graph (+ results of
-    prior probes) → suggests probes → we apply them; address results → we merge-expand the
-    graph deterministically → back to the LLM. Stop: no new addresses or rounds exhausted.
+    Full determinism↔LLM loop until convergence: the LLM looks at the graph → proposes typed
+    actions → the MEMBRANE executes+validates them (superset-only) → validated address leads are
+    merge-expanded deterministically → back to the LLM. Nodes first reached via an LLM action are
+    tagged origin='llm'. Stop: no new addresses or rounds exhausted.
     """
+    from ..domain.actions import parse_actions
+    from .membrane import apply_actions
     from .reconstruct import reconstruct
 
     for r in range(rounds):
-        data = await enrich_graph(graph, llm, on_event=on_event)
-        discovered = await apply_llm_probes(graph, rpc, data.get("probes", []), on_event=on_event)
+        data = await enrich_graph(graph, llm, rpc=rpc, selector_resolver=selector_resolver,
+                                  on_event=on_event)
+        actions = parse_actions(data.get("actions", []))
+        before = set(graph.nodes.keys())
+        discovered = await apply_actions(graph, rpc, actions, diag=diag, on_event=on_event)
         if on_event:
-            on_event("reason_round", {"round": r + 1, "discovered": len(discovered)})
+            on_event("reason_round", {"round": r + 1, "actions": len(actions),
+                                      "discovered": len(discovered)})
         if not discovered:
             break
         await reconstruct(discovered, rpc, source=source, existing=graph,
                           probe_chains=[], on_event=on_event)
+        for k in set(graph.nodes.keys()) - before:   # provenance: LLM-led discoveries
+            graph.nodes[k].origin = "llm"
     return graph

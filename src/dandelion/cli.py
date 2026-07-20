@@ -74,9 +74,11 @@ def map(  # noqa: A001 - CLI command name
         )
         if enrich:
             from .adapters.llm.factory import build_llm
+            from .adapters.selectors.openchain import OpenChainSelectors
             from .services.enrich import reason_loop
             await reason_loop(graph, client, build_llm(llm),
-                              source=ladder, rounds=rounds)
+                              source=ladder, rounds=rounds,
+                              selector_resolver=OpenChainSelectors())
         return graph
 
     graph = asyncio.run(_run())
