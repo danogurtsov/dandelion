@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 from collections import deque
 from collections.abc import Callable
+from dataclasses import asdict
 
 from ..domain.abi import (
     address_array_getters,
@@ -18,6 +19,7 @@ from ..domain.abi import (
     indexed_address_getters,
 )
 from ..domain.activity import participants_from_trace
+from ..domain.anomalies import detect_anomalies
 from ..domain.classify import classify_bytecode, type_from_name
 from ..domain.clones import collapse_clones
 from ..domain.cooccurrence import rank_neighbors, strong_neighbors
@@ -713,6 +715,13 @@ async def reconstruct(
             funds += 1
     if priced or funds:
         emit("relations", reads_price_from=priced, holds_funds=funds)
+
+    # audit-relevant structural anomalies (deterministic "look here" list)
+    anomalies = detect_anomalies(graph)
+    if anomalies:
+        graph.meta["anomalies"] = [asdict(a) for a in anomalies]
+        emit("anomalies", count=len(anomalies),
+             high=sum(1 for a in anomalies if a.severity == "high"))
 
     if not merge:
         graph.roots = sorted(seed_keys)

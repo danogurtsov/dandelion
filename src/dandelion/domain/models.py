@@ -267,6 +267,10 @@ class ArchitectureGraph:
         custody = sum(1 for e in self.edges if e.edge_type == EdgeType.HOLDS_FUNDS)
         if price_reads or custody:
             lines.append(f"  relations: reads_price_from={price_reads}, holds_funds={custody}")
+        anom = self.meta.get("anomalies") or []
+        if anom:
+            high = sum(1 for a in anom if a.get("severity") == "high")
+            lines.append(f"  anomalies: {len(anom)} ({high} high; see --anomalies)")
         # membership precision proxy (lazy import — audit lives in a sibling module)
         from .audit import membership_audit
         au = membership_audit(self)

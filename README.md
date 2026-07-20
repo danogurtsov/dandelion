@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Python-3.11--3.13-3776AB?logo=python&logoColor=white" alt="Python" />
   <img src="https://img.shields.io/badge/lint-ruff-261230?logo=ruff&logoColor=white" alt="Ruff" />
   <img src="https://img.shields.io/badge/types-mypy-2A6DB2" alt="mypy" />
-  <img src="https://img.shields.io/badge/tests-147%20passing-3fb950" alt="tests" />
+  <img src="https://img.shields.io/badge/tests-155%20passing-3fb950" alt="tests" />
   <img src="https://img.shields.io/badge/License-MIT-blue" alt="License: MIT" />
 </p>
 
@@ -54,7 +54,8 @@ clone-classes. No hints, no repo.
 - **Forensic-grade, no silent failures.** Pin every read to a historical block (`--block N`)
   to reconstruct the architecture as it was during an incident. Every skipped read is counted
   and surfaced in the graph's diagnostics, so an incomplete map declares itself instead of
-  looking complete.
+  looking complete. `--anomalies` ranks audit-relevant structural risks (single-key upgrade
+  control, funds under an EOA, unverified core) straight from the graph.
 
 ## Install
 
@@ -77,8 +78,14 @@ dandelion map 0xADDR --chain 1 --rpc $RPC --no-etherscan
 # Add the LLM reasoning loop (propose reads, probe deterministically, expand)
 dandelion map 0xADDR --chain 1 --rpc $RPC --enrich --llm anthropic:claude-sonnet-5
 
-# Reconstruct the architecture as of a historical block (incident forensics)
-dandelion map 0xADDR --chain 1 --rpc $ARCHIVE_RPC --block 17000000 --audit
+# Reconstruct as of a historical block, with the risk-anomaly list (incident forensics / audit)
+dandelion map 0xADDR --chain 1 --rpc $ARCHIVE_RPC --block 17000000 --audit --anomalies
+
+# Ground the LLM pass with the protocol's own docs (off-chain world knowledge)
+dandelion map 0xADDR --chain 1 --rpc $RPC --enrich --docs ./PROTOCOL.md
+
+# Ask a natural-language question about a saved graph (grounded, read-only)
+dandelion ask aave.graph.json "who can upgrade the pool and where are funds custodied?"
 ```
 
 Or from Python:
@@ -169,6 +176,11 @@ vocabulary) and a **protocol family** (`aave-v3-fork`, `layerzero-oapp`, …); b
 where determinism found nothing and are flagged `origin="llm"`, so a fact stays a fact and a guess
 stays a marked guess. This is where the AI earns its keep on protocols outside the tested sample.
 
+For flexibility, two more entry points: `--docs PROTOCOL.md` grounds the pass in the project's
+own documentation (world knowledge the chain alone lacks), and `dandelion ask graph.json "…"`
+answers natural-language questions **strictly from the graph**, replying "not in the graph"
+rather than guessing when the facts aren't there.
+
 ## Architecture
 
 Hexagonal (ports & adapters). A pure `domain/` core (graph model, proxy detection, membership,
@@ -188,7 +200,7 @@ src/dandelion/
 ## Development
 
 ```bash
-pytest                       # 147 unit tests, no network required
+pytest                       # 155 unit tests, no network required
 ruff check .                 # lint
 mypy src/dandelion/domain    # types on the pure core
 ```

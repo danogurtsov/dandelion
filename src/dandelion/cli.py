@@ -35,8 +35,11 @@ def map(  # noqa: A001 - CLI command name
     block: int | None = typer.Option(
         None, help="Pin every read to a historical block (incident forensics; needs an archive node)."),
     audit: bool = typer.Option(False, help="Print the membership precision audit (leaked-member list)."),
+    anomalies: bool = typer.Option(False, help="Print audit-relevant structural risk anomalies."),
     enrich: bool = typer.Option(False, help="Run the LLM reasoning loop (semantic labels + probes + expansion)."),
     rounds: int = typer.Option(2, help="Reasoning rounds for --enrich (determinism<->LLM)."),
+    docs: str | None = typer.Option(
+        None, help="Path to protocol docs/README to ground --enrich (off-chain reference context)."),
     llm: str = typer.Option(
         "anthropic:claude-sonnet-5",
         help="LLM spec provider:model for --enrich (e.g. anthropic:claude-opus-4-8 for hardest reasoning).",
@@ -76,9 +79,10 @@ def map(  # noqa: A001 - CLI command name
             from .adapters.llm.factory import build_llm
             from .adapters.selectors.openchain import OpenChainSelectors
             from .services.enrich import reason_loop
+            doc_text = Path(docs).read_text()[:20000] if docs else None
             await reason_loop(graph, client, build_llm(llm),
                               source=ladder, rounds=rounds,
-                              selector_resolver=OpenChainSelectors())
+                              selector_resolver=OpenChainSelectors(), docs=doc_text)
         return graph
 
     graph = asyncio.run(_run())
@@ -93,7 +97,28 @@ def map(  # noqa: A001 - CLI command name
                    f"leaked {au.leaked_members}/{au.total_members} members")
         for key, name, reason in au.leaks:
             typer.echo(f"  leak {key} ({name}): {reason}")
+    if anomalies:
+        anom = graph.meta.get("anomalies") or []
+        typer.echo(f"\nrisk anomalies: {len(anom)}")
+        for a in anom:
+            typer.echo(f"  [{a['severity']}] {a['kind']} {a['key']}: {a['detail']}")
     typer.echo(f"-> {out}")
+
+
+@app.command()
+def ask(
+    graph_file: str = typer.Argument(..., help="A saved ArchitectureGraph JSON (from `map`)."),
+    question: str = typer.Argument(..., help="A natural-language question about the system."),
+    llm: str = typer.Option("anthropic:claude-sonnet-5", help="LLM spec provider:model."),
+) -> None:
+    """Ask a natural-language question about a reconstructed graph (grounded, read-only)."""
+    import json
+
+    from .adapters.llm.factory import build_llm
+    from .services.enrich import answer_question
+
+    data = json.loads(Path(graph_file).read_text())
+    typer.echo(asyncio.run(answer_question(data, build_llm(llm), question)))
 
 
 if __name__ == "__main__":
